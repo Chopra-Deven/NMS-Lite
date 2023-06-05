@@ -11,12 +11,12 @@ func main() {
 
 	// Default is a pointer to a GoSNMP struct that contains sensible defaults
 	// eg port 161, community public, etc
-	g.Default.Target = "172.16.8.2"
-	err := g.Default.Connect()
+	snmp.Target = "172.16.8.2"
+	err := snmp.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)
 	}
-	defer g.Default.Conn.Close()
+	defer snmp.Conn.Close()
 
 	//oids := []string{utils.[]}
 	scalerOids := make([]string, len(utils.SCALERS))
@@ -29,7 +29,7 @@ func main() {
 		i++
 	}
 
-	result, err2 := g.Default.Get(scalerOids) // Get() accepts up to g.MAX_OIDS
+	result, err2 := snmp.Get(scalerOids) // Get() accepts up to g.MAX_OIDS
 
 	if err2 != nil {
 		log.Fatalf("Get() err: %v", err2)

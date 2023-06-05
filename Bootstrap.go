@@ -1,18 +1,40 @@
 package main
 
 import (
-	"NMS-Plugins/collect"
 	"NMS-Plugins/discovery"
+	interfaceinfo "NMS-Plugins/interface-info"
+	systeminfo "NMS-Plugins/system-info"
 	"encoding/json"
 	"flag"
 	"fmt"
+	g "github.com/gosnmp/gosnmp"
 	"os"
+	"strconv"
+	"strings"
 )
 
 var request string
 
 func init() {
 	flag.StringVar(&request, "json", os.Args[1], "credential")
+}
+
+func getSNMP(requestInput map[string]interface{}) g.GoSNMP {
+
+	g.Default.Target = fmt.Sprintf("%v", requestInput["ip"])
+	intPort, _ := strconv.Atoi(fmt.Sprintf("%v", requestInput["port"]))
+	g.Default.Port = uint16(intPort)
+	g.Default.Retries = 0
+	g.Default.Community = fmt.Sprintf("%v", requestInput["community"])
+	version := fmt.Sprintf("%v", requestInput["version"])
+
+	if strings.EqualFold(version, "v1") {
+		g.Default.Version = g.Version1
+	} else {
+		g.Default.Version = g.Version2c
+	}
+
+	return *g.Default
 }
 
 func main() {
@@ -37,7 +59,6 @@ func main() {
 			}
 
 			fmt.Println(string(response))
-
 		}
 
 	}()
@@ -48,7 +69,7 @@ func main() {
 
 	if requestMap["type"] == "discovery" {
 
-		name, err := discovery.Discovery(requestMap)
+		name, err := discovery.Discovery(getSNMP(requestMap))
 
 		if err != nil && name == "" {
 			panic(err)
@@ -73,31 +94,53 @@ func main() {
 
 	} else {
 
-		//fmt.Println("\nProvision Start\n")
-
-		_, err := discovery.Discovery(requestMap)
+		_, err := discovery.Discovery(getSNMP(requestMap))
 
 		if err != nil {
-			fmt.Println("Discovery error")
+			fmt.Println("Discovery Failed")
+			err = fmt.Errorf("discovery failed (maybe device is unreachable)")
 			panic(err)
 
 		} else {
 
-			response, err := collect.Collect(requestMap)
+			metrics := fmt.Sprintf("%v", requestMap["metrics"])
 
-			if err != nil {
-				panic(err)
+			switch {
+
+			case strings.EqualFold(metrics, "system.info"):
+				response, err := systeminfo.Collect(getSNMP(requestMap))
+
+				if err == nil {
+					requestMap["result"] = response
+
+					response, err := json.Marshal(requestMap)
+
+					if err == nil {
+						fmt.Println(string(response))
+					} else {
+						panic(err)
+					}
+				} else {
+					panic(err)
+				}
+
+			case strings.EqualFold(metrics, "interface.info"):
+				response, err := interfaceinfo.Collect(getSNMP(requestMap))
+
+				if err == nil {
+					requestMap["result"] = response
+
+					response, err := json.Marshal(requestMap)
+
+					if err == nil {
+						fmt.Println(string(response))
+					} else {
+						panic(err)
+					}
+				} else {
+					panic(err)
+				}
 			}
-
-			requestMap["result"] = response
-
-			response2, err := json.Marshal(requestMap)
-
-			if err != nil {
-				panic(err)
-			}
-
-			fmt.Println(string(response2))
 
 		}
 

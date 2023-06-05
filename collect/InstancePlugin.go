@@ -19,7 +19,6 @@ func Collect2(request map[string]interface{}) (response map[string]interface{}, 
 		if r := recover(); r != nil {
 			response["message"] = fmt.Sprintf("%v", r)
 			response["status"] = "Failed"
-			//fmt.Println("Inside recover")
 			response, err := json.Marshal(request)
 
 			if err != nil {
@@ -124,22 +123,22 @@ func Collect2(request map[string]interface{}) (response map[string]interface{}, 
 				index2, err := strconv.Atoi(parts[len(parts)-1])
 				_ = err
 				index := index2 - 1
-				if (*instanceMap)[index] == nil {
-					(*instanceMap)[index] = make(map[string]interface{})
-					(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+				if instanceResponce[index] == nil {
+					instanceResponce[index] = make(map[string]interface{})
+					instanceResponce[index][utils.INSTANCES[oid]] = pdu.Value
 
 					switch pdu.Type {
 					case g.OctetString:
 						b := pdu.Value.([]byte)
 
 						if strings.Contains(pdu.Name, ".1.3.6.1.2.1.2.2.1.6") {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
 						//fmt.Printf(" %s\n", g.ToBigInt(pdu.Value))
-						(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+						instanceResponce[index][utils.INSTANCES[oid]] = pdu.Value
 					}
 
 				} else {
@@ -148,12 +147,12 @@ func Collect2(request map[string]interface{}) (response map[string]interface{}, 
 						b := pdu.Value.([]byte)
 
 						if strings.Contains(pdu.Name, ".1.3.6.1.2.1.2.2.1.6") {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
-						(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+						instanceResponce[index][utils.INSTANCES[oid]] = pdu.Value
 					}
 				}
 

@@ -10,12 +10,12 @@ import (
 func main() {
 	// Default is a pointer to a GoSNMP struct that contains sensible defaults
 	// eg port 161, community public, etc
-	g.Default.Target = "172.16.8.2"
-	err := g.Default.Connect()
+	snmp.Target = "172.16.8.2"
+	err := snmp.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)
 	}
-	defer g.Default.Conn.Close()
+	defer snmp.Conn.Close()
 
 	//oids := []string{"1.1.3.6.1.2.1.1.5", "1.1.3.6.1.2.1.1.1"}
 
@@ -27,13 +27,13 @@ func main() {
 		j++
 	}
 
-	/*err2 := g.Default.BulkWalk(instanceOids, printValue) // Get() accepts up to g.MAX_OIDS
+	/*err2 := snmp.BulkWalk(instanceOids, printValue) // Get() accepts up to g.MAX_OIDS
 	if err2 != nil {
 		log.Fatalf("Get() err: %v", err2)
 	}*/
 
 	//for _, oid := range instanceOids {
-	err2 := g.Default.BulkWalk(".1.3.6.1.2.1.2.2.1.6", printValue) // Get() accepts up to g.MAX_OIDS
+	err2 := snmp.BulkWalk(".1.3.6.1.2.1.2.2.1.6", printValue) // Get() accepts up to g.MAX_OIDS
 	if err2 != nil {
 		panic(err2)
 	}

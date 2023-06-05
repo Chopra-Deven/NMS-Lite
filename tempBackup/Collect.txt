@@ -32,22 +32,22 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 
 	}()
 
-	g.Default.Target = fmt.Sprintf("%v", request["ip"])
+	snmp.Target = fmt.Sprintf("%v", request["ip"])
 	intPort, _ := strconv.Atoi(fmt.Sprintf("%v", request["port"]))
-	g.Default.Port = uint16(intPort)
+	snmp.Port = uint16(intPort)
 	version := fmt.Sprintf("%v", request["version"])
 
 	if strings.EqualFold(version, "v1") {
-		g.Default.Version = g.Version1
+		snmp.Version = g.Version1
 	} else {
-		g.Default.Version = g.Version2c
+		snmp.Version = g.Version2c
 	}
 
-	err := g.Default.Connect()
+	err := snmp.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)
 	}
-	defer g.Default.Conn.Close()
+	defer snmp.Conn.Close()
 
 	var wg sync.WaitGroup
 
@@ -73,7 +73,7 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 
 	go func(wg *sync.WaitGroup, response *map[string]interface{}) {
 
-		result, err2 := g.Default.Get(scalerOids) // Get() accepts up to g.MAX_OIDS
+		result, err2 := snmp.Get(scalerOids) // Get() accepts up to g.MAX_OIDS
 		if err2 != nil {
 			panic(err2)
 		}
@@ -97,32 +97,32 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 
 	instanceResponce := make(map[string]map[string]interface{})
 
-	go func(wg *sync.WaitGroup, instanceMap *map[string]map[string]interface{}) {
+	go func(wg *sync.WaitGroup, instanceResponce *map[string]map[string]interface{}) {
 
 		for _, oid := range instanceOids {
 
-			err2 := g.Default.BulkWalk(oid, func(pdu g.SnmpPDU) error {
+			err2 := snmp.BulkWalk(oid, func(pdu g.SnmpPDU) error {
 
 				parts := strings.Split(pdu.Name, ".")
 
 				index := fmt.Sprintf(parts[len(parts)-1])
 
-				if (*instanceMap)[index] == nil {
-					(*instanceMap)[index] = make(map[string]interface{})
-					(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+				if instanceResponce[index] == nil {
+					instanceResponce[index] = make(map[string]interface{})
+					instanceResponce[index][utils.INSTANCES[oid]] = pdu.Value
 
 					switch pdu.Type {
 					case g.OctetString:
 						b := pdu.Value.([]byte)
 
 						if strings.Contains(pdu.Name, ".1.3.6.1.2.1.2.2.1.6") {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
 						//fmt.Printf(" %s\n", g.ToBigInt(pdu.Value))
-						(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+						instanceResponce[index][utils.INSTANCES[oid]] = pdu.Value
 					}
 
 				} else {
@@ -131,12 +131,12 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 						b := pdu.Value.([]byte)
 
 						if strings.Contains(pdu.Name, ".1.3.6.1.2.1.2.2.1.6") {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
-						(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+						instanceResponce[index][utils.INSTANCES[oid]] = pdu.Value
 					}
 				}
 
@@ -149,7 +149,7 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 
 		}
 
-		//jsonObj2, err := json.Marshal(*instanceMap)
+		//jsonObj2, err := json.MarshalinstanceResponce
 
 		//fmt.Println("\n\nJSON Of Instances : \n", string(jsonObj2), "\n\n")
 

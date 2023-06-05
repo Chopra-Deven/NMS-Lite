@@ -129,9 +129,9 @@ func Collect(request map[string]interface{}) (response map[string]interface{}, e
 				_ = err
 				index := index2 - 1
 
-				if (*instanceMap)[index] == nil {
-					(*instanceMap)[index] = make(map[string]interface{})
-					(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+				if instanceResponce[index] == nil {
+					instanceResponce[index] = make(map[string]interface{})
+					instanceResponce[index][utils.INSTANCES[oid]] = pdu.Value
 
 					switch pdu.Type {
 
@@ -139,13 +139,13 @@ func Collect(request map[string]interface{}) (response map[string]interface{}, e
 						b := pdu.Value.([]byte)
 
 						if strings.Contains(pdu.Name, utils.CounterToOids["interface.physical.address"]) {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
 						//fmt.Printf(" %s\n", g.ToBigInt(pdu.Value))
-						(*instanceMap)[index][utils.INSTANCES[oid]] = fmt.Sprintf("%v", pdu.Value)
+						instanceResponce[index][utils.INSTANCES[oid]] = fmt.Sprintf("%v", pdu.Value)
 					}
 
 				} else {
@@ -154,12 +154,12 @@ func Collect(request map[string]interface{}) (response map[string]interface{}, e
 						b := pdu.Value.([]byte)
 
 						if strings.Contains(pdu.Name, utils.CounterToOids["interface.physical.address"]) {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
-							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
+							instanceResponce[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
-						(*instanceMap)[index][utils.INSTANCES[oid]] = fmt.Sprintf("%v", pdu.Value)
+						instanceResponce[index][utils.INSTANCES[oid]] = fmt.Sprintf("%v", pdu.Value)
 					}
 				}
 

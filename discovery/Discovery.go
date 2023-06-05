@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	g "github.com/gosnmp/gosnmp"
-	"strconv"
-	"strings"
 )
 
-func Discovery(request map[string]interface{}) (systemName string, err error) {
+func Discovery(snmp g.GoSNMP) (systemName string, err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -21,33 +19,25 @@ func Discovery(request map[string]interface{}) (systemName string, err error) {
 
 	oidSlice := []string{utils.CounterToOids["system.name"]}
 
-	g.Default.Target = fmt.Sprintf("%v", request["ip"])
-	intPort, _ := strconv.Atoi(fmt.Sprintf("%v", request["port"]))
-	g.Default.Port = uint16(intPort)
-	g.Default.Retries = 0
-	version := fmt.Sprintf("%v", request["version"])
+	err = snmp.Connect()
 
-	if strings.EqualFold(version, "v1") {
-		g.Default.Version = g.Version1
-	} else {
-		g.Default.Version = g.Version2c
-	}
+	defer func() {
+		err = snmp.Conn.Close()
 
-	err = g.Default.Connect()
+		if err != nil {
+			err = fmt.Errorf("error While closing the snmp connection")
+		}
 
-	defer g.Default.Conn.Close()
+	}()
 
 	if err != nil {
 		systemName = ""
 		return
 	}
 
-	defer g.Default.Conn.Close()
-
-	result, err := g.Default.Get(oidSlice)
+	result, err := snmp.Get(oidSlice)
 
 	if err != nil {
-		//log.Fatalf("Get() err: %v", err)
 		systemName = ""
 		return
 	}
