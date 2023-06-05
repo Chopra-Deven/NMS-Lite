@@ -6,28 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	g "github.com/gosnmp/gosnmp"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
 )
 
-var ch = make(chan string)
-
-func Collect(request map[string]interface{}) (map[string]interface{}, error) {
+func Collect(request map[string]interface{}) (response map[string]interface{}, err error) {
 
 	defer func() {
 
 		if r := recover(); r != nil {
-			request["result"] = "Failed " + fmt.Sprintf("%v", r)
-			fmt.Println("Inside recover")
-			response, err := json.Marshal(request)
-
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println(response)
-			log.Fatalf("%v", err)
+			response["message"] = fmt.Sprintf("%v", r)
+			response["status"] = "Failed"
+			err = fmt.Errorf("%v", r)
 		}
 
 	}()
@@ -43,9 +34,9 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 		g.Default.Version = g.Version2c
 	}
 
-	err := g.Default.Connect()
-	if err != nil {
-		log.Fatalf("Connect() err: %v", err)
+	err2 := g.Default.Connect()
+	if err2 != nil {
+		panic(err2)
 	}
 	defer g.Default.Conn.Close()
 
@@ -69,60 +60,92 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 		j++
 	}
 
-	response := make(map[string]interface{})
+	response = make(map[string]interface{})
 
 	go func(wg *sync.WaitGroup, response *map[string]interface{}) {
 
-		result, err2 := g.Default.Get(scalerOids) // Get() accepts up to g.MAX_OIDS
-		if err2 != nil {
-			panic(err2)
+		defer wg.Done()
+
+		defer func() {
+
+			if r := recover(); r != nil {
+				(*response)["message"] = fmt.Sprintf("%v", r)
+			}
+
+		}()
+
+		result, err := g.Default.Get(scalerOids) // Get() accepts up to g.MAX_OIDS
+		if err != nil {
+			panic(err)
 		}
 
 		for _, variable := range result.Variables {
-			//fmt.Printf("%d: oid: %s ", i, variable.Name)
 
 			switch variable.Type {
 			case g.OctetString:
-				//fmt.Printf("string: %s\n", string(variable.Value.([]byte)))
 				(*response)[utils.SCALERS[variable.Name]] = string(variable.Value.([]byte))
 			default:
-				//fmt.Printf("number: %d\n", g.ToBigInt(variable.Value))
-				(*response)[utils.SCALERS[variable.Name]] = variable.Value
+				(*response)[utils.SCALERS[variable.Name]] = fmt.Sprintf("%v", variable.Value)
 			}
 		}
 
-		wg.Done()
-
 	}(&wg, &response)
 
-	instanceResponce := make(map[string]map[string]interface{})
+	numberOfInterface := 0
 
-	go func(wg *sync.WaitGroup, instanceMap *map[string]map[string]interface{}) {
+	func(number *int) {
 
+		oid := []string{utils.CounterToOids["system.interfaces"]}
+
+		result, err := g.Default.Get(oid) // Get() accepts up to g.MAX_OIDS
+		if err != nil {
+			panic(err)
+		}
+
+		for _, variable := range result.Variables {
+			*number = variable.Value.(int)
+		}
+	}(&numberOfInterface)
+
+	instanceResponce := make([]map[string]interface{}, numberOfInterface)
+
+	go func(wg *sync.WaitGroup, instanceMap *[]map[string]interface{}) {
+		defer wg.Done()
+
+		defer func() {
+
+			if r := recover(); r != nil {
+				response["message"] = fmt.Sprintf("%v", r)
+			}
+
+		}()
 		for _, oid := range instanceOids {
 
-			err2 := g.Default.BulkWalk(oid, func(pdu g.SnmpPDU) error {
+			err = g.Default.BulkWalk(oid, func(pdu g.SnmpPDU) error {
 
 				parts := strings.Split(pdu.Name, ".")
 
-				index := fmt.Sprintf(parts[len(parts)-1])
+				index2, err := strconv.Atoi(parts[len(parts)-1])
+				_ = err
+				index := index2 - 1
 
 				if (*instanceMap)[index] == nil {
 					(*instanceMap)[index] = make(map[string]interface{})
 					(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
 
 					switch pdu.Type {
+
 					case g.OctetString:
 						b := pdu.Value.([]byte)
 
-						if strings.Contains(pdu.Name, ".1.3.6.1.2.1.2.2.1.6") {
+						if strings.Contains(pdu.Name, utils.CounterToOids["interface.physical.address"]) {
 							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
 							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
 						//fmt.Printf(" %s\n", g.ToBigInt(pdu.Value))
-						(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+						(*instanceMap)[index][utils.INSTANCES[oid]] = fmt.Sprintf("%v", pdu.Value)
 					}
 
 				} else {
@@ -130,34 +153,28 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 					case g.OctetString:
 						b := pdu.Value.([]byte)
 
-						if strings.Contains(pdu.Name, ".1.3.6.1.2.1.2.2.1.6") {
+						if strings.Contains(pdu.Name, utils.CounterToOids["interface.physical.address"]) {
 							(*instanceMap)[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 						} else {
 							(*instanceMap)[index][utils.INSTANCES[oid]] = string(b)
 						}
 					default:
-						(*instanceMap)[index][utils.INSTANCES[oid]] = pdu.Value
+						(*instanceMap)[index][utils.INSTANCES[oid]] = fmt.Sprintf("%v", pdu.Value)
 					}
 				}
 
 				return nil
 			})
 
-			if err2 != nil {
-				panic(err2)
+			if err != nil {
+				//panic(err)
 			}
 
 		}
 
-		//jsonObj2, err := json.Marshal(*instanceMap)
-
-		//fmt.Println("\n\nJSON Of Instances : \n", string(jsonObj2), "\n\n")
-
 		if err != nil {
 			panic(err)
 		}
-
-		wg.Done()
 
 	}(&wg, &instanceResponce)
 
@@ -173,6 +190,6 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 		panic(err)
 	}
 
-	return response, nil
+	return response, err
 
 }

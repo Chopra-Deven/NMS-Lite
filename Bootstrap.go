@@ -6,11 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	g "github.com/gosnmp/gosnmp"
-	"log"
 	"os"
-	"strconv"
-	"strings"
 )
 
 var request string
@@ -30,15 +26,18 @@ func main() {
 	defer func() {
 
 		if r := recover(); r != nil {
-			requestMap["result"] = "Failed " + fmt.Sprintf("%v", r)
+			requestMap["status"] = "Failed"
+
+			requestMap["message"] = fmt.Sprintf("%v", r)
 
 			response, err := json.Marshal(requestMap)
 
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println(response)
-			log.Fatalf("%v", err)
+
+			fmt.Println(string(response))
+
 		}
 
 	}()
@@ -47,29 +46,11 @@ func main() {
 		panic(err)
 	}
 
-	g.Default.Target = fmt.Sprintf("%v", requestMap["ip"])
-	intPort, _ := strconv.Atoi(fmt.Sprintf("%v", requestMap["port"]))
-	g.Default.Port = uint16(intPort)
-	version := fmt.Sprintf("%v", requestMap["version"])
-
-	if strings.EqualFold(version, "v1") {
-		g.Default.Version = g.Version1
-	} else {
-		g.Default.Version = g.Version2c
-	}
-
-	err = g.Default.Connect()
-
-	if err != nil {
-		log.Fatalf("Connect() err: %v", err)
-	}
-	defer g.Default.Conn.Close()
-
 	if requestMap["type"] == "discovery" {
 
-		id, err := discovery.Discovery(requestMap)
+		name, err := discovery.Discovery(requestMap)
 
-		if err != nil {
+		if err != nil && name == "" {
 			panic(err)
 
 		} else {
@@ -77,7 +58,7 @@ func main() {
 			result := make(map[string]string)
 
 			result["status"] = "success"
-			result["system.name"] = id
+			result["system.name"] = name
 
 			requestMap["result"] = result
 
@@ -89,9 +70,8 @@ func main() {
 
 			fmt.Println(string(response))
 		}
-		fmt.Println("\nDisovery end\n")
 
-	} else if requestMap["type"] == "provision" {
+	} else {
 
 		//fmt.Println("\nProvision Start\n")
 
@@ -119,11 +99,7 @@ func main() {
 
 			fmt.Println(string(response2))
 
-			//fmt.Println(string(response))
 		}
-		//fmt.Println("\nProvision Ended\n")
-
-	} else {
 
 	}
 

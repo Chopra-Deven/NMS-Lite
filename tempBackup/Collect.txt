@@ -69,8 +69,6 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 		j++
 	}
 
-	fmt.Println("\nSlice generated\n")
-
 	response := make(map[string]interface{})
 
 	go func(wg *sync.WaitGroup, response *map[string]interface{}) {
@@ -94,22 +92,14 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 		}
 
 		wg.Done()
-		jsonObj, err := json.Marshal(*response)
 
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Println("\n\nJSON : ", string(jsonObj), "\n\n")
 	}(&wg, &response)
 
 	instanceResponce := make(map[string]map[string]interface{})
 
 	go func(wg *sync.WaitGroup, instanceMap *map[string]map[string]interface{}) {
-		k := 0
 
 		for _, oid := range instanceOids {
-			fmt.Println(k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k)
 
 			err2 := g.Default.BulkWalk(oid, func(pdu g.SnmpPDU) error {
 
@@ -156,16 +146,12 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 			if err2 != nil {
 				panic(err2)
 			}
-			k++
+
 		}
 
-		fmt.Println("provision completed from func")
+		//jsonObj2, err := json.Marshal(*instanceMap)
 
-		//fmt.Println("\n\nMap Of Instances : \n", instanceMap, "\n\n")
-
-		jsonObj2, err := json.Marshal(*instanceMap)
-
-		fmt.Println("\n\nJSON Of Instances : \n", string(jsonObj2), "\n\n")
+		//fmt.Println("\n\nJSON Of Instances : \n", string(jsonObj2), "\n\n")
 
 		if err != nil {
 			panic(err)
@@ -176,6 +162,17 @@ func Collect(request map[string]interface{}) (map[string]interface{}, error) {
 	}(&wg, &instanceResponce)
 
 	wg.Wait()
-	return nil, nil
+
+	response["interface"] = instanceResponce
+
+	response2, err := json.Marshal(response)
+
+	_ = response2
+
+	if err != nil {
+		panic(err)
+	}
+
+	return response, nil
 
 }

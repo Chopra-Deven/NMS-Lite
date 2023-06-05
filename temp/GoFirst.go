@@ -18,7 +18,7 @@ func main() {
 	}
 	defer g.Default.Conn.Close()
 
-	//oids := []string{"1.1.3.6.1.2.1.1.5", "1.1.3.6.1.2.1.1.1"}
+	//oids := []string{utils.[]}
 	scalerOids := make([]string, len(utils.SCALERS))
 	//instanceOids := make([]string, len(utils.INSTANCES))
 

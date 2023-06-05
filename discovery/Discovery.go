@@ -1,37 +1,30 @@
 package discovery
 
 import (
-	"encoding/json"
+	"NMS-Plugins/utils"
+	"errors"
 	"fmt"
 	g "github.com/gosnmp/gosnmp"
-	"log"
 	"strconv"
 	"strings"
 )
 
-func Discovery(request map[string]interface{}) (string, error) {
+func Discovery(request map[string]interface{}) (systemName string, err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			request["result"] = "Failed " + fmt.Sprintf("%v", r)
-
-			response, err := json.Marshal(request)
-
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println(response)
-			log.Fatalf("%v", err)
+			err = errors.New(fmt.Sprintf("%v", r))
+			systemName = ""
 		}
+
 	}()
 
-	oidSlice := []string{".1.3.6.1.2.1.1.5.0"}
+	oidSlice := []string{utils.CounterToOids["system.name"]}
 
 	g.Default.Target = fmt.Sprintf("%v", request["ip"])
-	//g.Default.Community = fmt.Sprintf("%v", request["community"])
-	//g.Default.Port = request["port"].(uint16)
 	intPort, _ := strconv.Atoi(fmt.Sprintf("%v", request["port"]))
 	g.Default.Port = uint16(intPort)
+	g.Default.Retries = 0
 	version := fmt.Sprintf("%v", request["version"])
 
 	if strings.EqualFold(version, "v1") {
@@ -40,31 +33,29 @@ func Discovery(request map[string]interface{}) (string, error) {
 		g.Default.Version = g.Version2c
 	}
 
-	err := g.Default.Connect()
+	err = g.Default.Connect()
 
 	defer g.Default.Conn.Close()
 
 	if err != nil {
-		return "", err
+		systemName = ""
+		return
 	}
 
 	defer g.Default.Conn.Close()
 
-	result, err2 := g.Default.Get(oidSlice) // Get() accepts up to g.MAX_OIDS
-	if err2 != nil {
-		//log.Fatalf("Get() err: %v", err2)
-		return "", err2
+	result, err := g.Default.Get(oidSlice)
+
+	if err != nil {
+		//log.Fatalf("Get() err: %v", err)
+		systemName = ""
+		return
 	}
 
 	for _, variable := range result.Variables {
+		return string(variable.Value.([]byte)), err
 
-		switch variable.Type {
-		case g.OctetString:
-			return string(variable.Value.([]byte)), nil
-		default:
-
-			fmt.Printf("number: %d\n", g.ToBigInt(variable.Value))
-		}
 	}
-	return "", nil
+
+	return
 }
