@@ -4,37 +4,18 @@ import (
 	"NMS-Plugins/discovery"
 	interfaceinfo "NMS-Plugins/interface-info"
 	systeminfo "NMS-Plugins/system-info"
+	"NMS-Plugins/utils"
 	"encoding/json"
 	"flag"
 	"fmt"
-	g "github.com/gosnmp/gosnmp"
 	"os"
-	"strconv"
 	"strings"
 )
 
 var request string
 
 func init() {
-	flag.StringVar(&request, "json", os.Args[1], "credential")
-}
-
-func getSNMP(requestInput map[string]interface{}) g.GoSNMP {
-
-	g.Default.Target = fmt.Sprintf("%v", requestInput["ip"])
-	intPort, _ := strconv.Atoi(fmt.Sprintf("%v", requestInput["port"]))
-	g.Default.Port = uint16(intPort)
-	g.Default.Retries = 0
-	g.Default.Community = fmt.Sprintf("%v", requestInput["community"])
-	version := fmt.Sprintf("%v", requestInput["version"])
-
-	if strings.EqualFold(version, "v1") {
-		g.Default.Version = g.Version1
-	} else {
-		g.Default.Version = g.Version2c
-	}
-
-	return *g.Default
+	flag.StringVar(&request, "json", os.Args[1], "user input")
 }
 
 func main() {
@@ -48,17 +29,12 @@ func main() {
 	defer func() {
 
 		if r := recover(); r != nil {
-			requestMap["status"] = "Failed"
 
-			requestMap["message"] = fmt.Sprintf("%v", r)
+			requestMap[utils.RESULT] = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", r))
 
-			response, err := json.Marshal(requestMap)
+			result, _ := json.Marshal(requestMap)
 
-			if err != nil {
-				panic(err)
-			}
-
-			fmt.Println(string(response))
+			fmt.Println(string(result))
 		}
 
 	}()
@@ -67,21 +43,26 @@ func main() {
 		panic(err)
 	}
 
-	if requestMap["type"] == "discovery" {
+	snmp, errorMessage := utils.GetSNMP2(requestMap)
 
-		name, err := discovery.Discovery(getSNMP(requestMap))
+	if !strings.EqualFold(errorMessage, utils.EMPTY_STRING) {
+		panic(errorMessage)
+	}
 
-		if err != nil && name == "" {
-			panic(err)
+	if requestMap[utils.TYPE] == utils.DISCOVERY {
+
+		data, err := discovery.Discovery(snmp)
+
+		if err != nil || data == nil {
+
+			requestMap[utils.RESULT] = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
+			response, _ := json.Marshal(requestMap)
+
+			fmt.Println(string(response))
 
 		} else {
 
-			result := make(map[string]string)
-
-			result["status"] = "success"
-			result["system.name"] = name
-
-			requestMap["result"] = result
+			requestMap[utils.RESULT] = data
 
 			response, err := json.Marshal(requestMap)
 
@@ -94,54 +75,56 @@ func main() {
 
 	} else {
 
-		_, err := discovery.Discovery(getSNMP(requestMap))
+		metrics := fmt.Sprintf("%v", requestMap[utils.METRICS])
 
-		if err != nil {
-			fmt.Println("Discovery Failed")
-			err = fmt.Errorf("discovery failed (maybe device is unreachable)")
-			panic(err)
+		switch {
 
-		} else {
+		case strings.EqualFold(metrics, utils.SYSTEM_INFO):
 
-			metrics := fmt.Sprintf("%v", requestMap["metrics"])
+			data, err := systeminfo.Collect(snmp)
 
-			switch {
+			if err == nil {
 
-			case strings.EqualFold(metrics, "system.info"):
-				response, err := systeminfo.Collect(getSNMP(requestMap))
+				requestMap[utils.RESULT] = data
+
+				response, err := json.Marshal(requestMap)
 
 				if err == nil {
-					requestMap["result"] = response
-
-					response, err := json.Marshal(requestMap)
-
-					if err == nil {
-						fmt.Println(string(response))
-					} else {
-						panic(err)
-					}
+					fmt.Println(string(response))
 				} else {
 					panic(err)
 				}
+			} else {
+				requestMap[utils.RESULT] = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
 
-			case strings.EqualFold(metrics, "interface.info"):
-				response, err := interfaceinfo.Collect(getSNMP(requestMap))
+				result, _ := json.Marshal(requestMap)
 
-				if err == nil {
-					requestMap["result"] = response
-
-					response, err := json.Marshal(requestMap)
-
-					if err == nil {
-						fmt.Println(string(response))
-					} else {
-						panic(err)
-					}
-				} else {
-					panic(err)
-				}
+				fmt.Println(string(result))
 			}
 
+		case strings.EqualFold(metrics, utils.INTERFACE_INFO):
+
+			data, err := interfaceinfo.Collect(snmp)
+
+			if err == nil {
+
+				requestMap[utils.RESULT] = data
+
+				response, err := json.Marshal(requestMap)
+
+				if err == nil {
+					fmt.Println(string(response))
+				} else {
+					panic(err)
+				}
+
+			} else {
+				requestMap[utils.RESULT] = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
+
+				result, _ := json.Marshal(requestMap)
+
+				fmt.Println(string(result))
+			}
 		}
 
 	}

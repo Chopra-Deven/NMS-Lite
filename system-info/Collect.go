@@ -8,27 +8,29 @@ import (
 
 func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 
+	response = make(map[string]interface{})
+
 	defer func() {
 
 		if r := recover(); r != nil {
-			response["message"] = fmt.Sprintf("%v", r)
-			response["status"] = "Failed"
-			err = fmt.Errorf("%v", r)
+			response = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
 		}
 
 	}()
 
-	err2 := snmp.Connect()
+	err = snmp.Connect()
 
-	if err2 != nil {
-		panic(err2)
+	if err != nil {
+		err = fmt.Errorf("connection failed : %v", err)
+		return
 	}
 
 	defer func() {
 		err = snmp.Conn.Close()
 
 		if err != nil {
-			err = fmt.Errorf("error While closing the snmp connection")
+			err = fmt.Errorf("error While closing the snmp connection : %v", err)
+			return
 		}
 
 	}()
@@ -42,11 +44,11 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 		i++
 	}
 
-	response = make(map[string]interface{})
+	result, err := snmp.Get(scalerOids)
 
-	result, err := snmp.Get(scalerOids) // Get() accepts up to g.MAX_OIDS
 	if err != nil {
-		panic(err)
+		response = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
+		return nil, err
 	}
 
 	systemInfo := make(map[string]interface{})
@@ -61,7 +63,17 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 		}
 	}
 
-	response["system.info"] = systemInfo
+	if err == nil {
+		dataMap := make(map[string]interface{})
+
+		dataMap[utils.SYSTEM_INFO] = systemInfo
+
+		response[utils.DATA] = dataMap
+
+		response[utils.STATUS] = utils.SUCCESS
+	} else {
+		response = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
+	}
 
 	return
 

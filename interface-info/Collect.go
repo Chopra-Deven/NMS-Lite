@@ -11,12 +11,12 @@ import (
 
 func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 
+	response = make(map[string]interface{})
+
 	defer func() {
 
 		if r := recover(); r != nil {
-			response["message"] = fmt.Sprintf("%v", r)
-			response["status"] = "Failed"
-			err = fmt.Errorf("%v", r)
+			response = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
 		}
 
 	}()
@@ -24,14 +24,20 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 	err = snmp.Connect()
 
 	if err != nil {
-		panic("Unable to connect to snmp")
+
+		err = fmt.Errorf("connection failed : %v", err)
+
+		return
 	}
 
 	defer func() {
 		err = snmp.Conn.Close()
 
 		if err != nil {
-			panic("error While closing the snmp connection")
+
+			err = fmt.Errorf("error While closing the snmp connection : %v", err)
+
+			return
 		}
 	}()
 
@@ -47,11 +53,12 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 
 	func(number *int) {
 
-		oid := []string{utils.CounterToOids["system.interfaces"]}
+		oid := []string{utils.CounterToOIds["system.interfaces"]}
 
-		result, err := snmp.Get(oid) // Get() accepts up to g.MAX_OIDS
+		result, err := snmp.Get(oid)
 		if err != nil {
-			panic(err)
+			response = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
+			return
 		}
 
 		for _, variable := range result.Variables {
@@ -59,17 +66,21 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 		}
 	}(&numberOfInterface)
 
-	instanceResponse := make([]map[string]interface{}, numberOfInterface)
+	instanceResponse := make(map[int]map[string]interface{})
+
+	var walkOrBulkWalk = snmp.BulkWalk
+
+	if snmp.Version == g.Version1 {
+		walkOrBulkWalk = snmp.Walk
+	}
 
 	for _, oid := range instanceOids {
 
-		err = snmp.BulkWalk(oid, func(pdu g.SnmpPDU) error {
+		err = walkOrBulkWalk(oid, func(pdu g.SnmpPDU) error {
 
 			parts := strings.Split(pdu.Name, ".")
 
-			index2, err := strconv.Atoi(parts[len(parts)-1])
-			_ = err
-			index := index2 - 1
+			index, _ := strconv.Atoi(parts[len(parts)-1])
 
 			if instanceResponse[index] == nil {
 				instanceResponse[index] = make(map[string]interface{})
@@ -80,7 +91,7 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 				case g.OctetString:
 					b := pdu.Value.([]byte)
 
-					if strings.Contains(pdu.Name, utils.CounterToOids["interface.physical.address"]) {
+					if strings.Contains(pdu.Name, utils.CounterToOIds["interface.physical.address"]) {
 						instanceResponse[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 					} else {
 						instanceResponse[index][utils.INSTANCES[oid]] = string(b)
@@ -94,7 +105,7 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 				case g.OctetString:
 					b := pdu.Value.([]byte)
 
-					if strings.Contains(pdu.Name, utils.CounterToOids["interface.physical.address"]) {
+					if strings.Contains(pdu.Name, utils.CounterToOIds["interface.physical.address"]) {
 						instanceResponse[index][utils.INSTANCES[oid]] = hex.EncodeToString(b)
 					} else {
 						instanceResponse[index][utils.INSTANCES[oid]] = string(b)
@@ -107,14 +118,27 @@ func Collect(snmp g.GoSNMP) (response map[string]interface{}, err error) {
 			return nil
 		})
 
-		if err != nil {
-			//panic(err)
-		}
-
 	}
-	response = make(map[string]interface{})
 
-	response["interface"] = instanceResponse
+	data := make([]map[string]interface{}, len(instanceResponse))
+
+	i := 0
+	for _, interfaceInstance := range instanceResponse {
+		data[i] = interfaceInstance
+		i++
+	}
+
+	if err == nil {
+
+		dataMap := make(map[string]interface{})
+
+		dataMap[utils.INTERFACE_INFO] = data
+
+		response[utils.STATUS] = utils.SUCCESS
+		response[utils.DATA] = dataMap
+	} else {
+		response = utils.SetResponse(utils.FAILED, fmt.Sprintf("%v", err))
+	}
 
 	return response, nil
 }

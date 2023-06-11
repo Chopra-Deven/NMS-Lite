@@ -1,5 +1,0 @@
-package collect
-
-//func ()  {
-//
-//}
